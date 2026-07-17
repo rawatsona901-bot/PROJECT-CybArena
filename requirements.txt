@@ -1,3 +1,6 @@
 pandas
 streamlit
 plotly
+streamlit-option-menu
+datetime
+st_aggrid
