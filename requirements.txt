@@ -1,0 +1,4 @@
+Libraries used:-
+- Pandas : import pandas as pd
+- Sreamlit : import streamlit as st
+- Plotly : import plotly.express as px
