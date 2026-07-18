@@ -88,7 +88,7 @@ Cyber Intelligence Center
 </p>
 """, unsafe_allow_html=True)
         selected=option_menu(menu_title="Main Menu",
-        options=["Home","Data-set","Preprocessing","Graphs","Attack Guide","About"],icons=["house","table","bar-chart","graph-up-arrow","shield lock","person"],default_index=0)
+        options=["Home","Data-set","Graphs","Attack Guide","About"],icons=["house","table","graph-up-arrow","shield lock","person"],default_index=0)
 
 # ---------------------------------------------- H O M E ------------------------------------------
 
@@ -258,7 +258,9 @@ Cyber Threat Intelligence Dashboard
     with col3:
         st.error(f"💰 Total Loss: ${df['Financial Loss (in Million $)'].sum():,.2f} Million")
         
-    st.markdown("## 🌍 Global Cyber Threat Map")
+   
+   
+    st.markdown("## 🌍 Global Cyber Threat Hotspots")
 
     country_loss = (
     df.groupby("Country")["Financial Loss (in Million $)"]
@@ -266,21 +268,50 @@ Cyber Threat Intelligence Dashboard
     .reset_index()
 )
 
-    fig_map = px.choropleth(
+    fig_map = px.scatter_geo(
     country_loss,
     locations="Country",
     locationmode="country names",
+    size="Financial Loss (in Million $)",
     color="Financial Loss (in Million $)",
     hover_name="Country",
-    color_continuous_scale="Blues",
-    title="Financial Loss by Country"
+    hover_data={
+        "Financial Loss (in Million $)":":,.2f"
+    },
+    projection="orthographic",      # Globe View
+    color_continuous_scale="Turbo",
+    title="Global Cyber Threat Hotspots"
+)
+
+    fig_map.update_traces(
+    marker=dict(
+        opacity=0.85,
+        line=dict(color="#00FFFF", width=1.5)
+    )
+)
+
+    fig_map.update_geos(
+    bgcolor="#0D1117",
+    showland=True,
+    landcolor="#16213E",
+    showocean=True,
+    oceancolor="#08131F",
+    showcountries=True,
+    countrycolor="#00FFFF",
+    coastlinecolor="#00FFFF",
+    showframe=False,
 )
 
     fig_map.update_layout(
+    template="plotly_dark",
     paper_bgcolor="#0D1117",
     plot_bgcolor="#0D1117",
-    font_color="white",
-    margin=dict(l=0, r=0, t=50, b=0)
+    font=dict(color="white"),
+    title_font=dict(size=24, color="#00FFFF"),
+    margin=dict(l=0, r=0, t=50, b=0),
+    coloraxis_colorbar=dict(
+        title="Loss ($M)"
+    )
 )
 
     st.plotly_chart(fig_map, use_container_width=True)
@@ -290,7 +321,7 @@ Cyber Threat Intelligence Dashboard
     
 # --------------------------------- D A T A - S E T ------------------------------------
 
-elif selected=="Data-set":
+elif selected == "Data-set":
 
     st.write(f"**Rows:** {df.shape[0]}")
     st.write(f"**Columns:** {df.shape[1]}")
@@ -305,25 +336,84 @@ elif selected=="Data-set":
         step=10
     )
 
-    t1, t2, t3 = st.tabs(["Data", "Info", "Summary"])
+    # ---------------- FILTERS ----------------
 
-    # ---------------- DATA TAB ----------------
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        country = st.selectbox(
+            "🌍 Country",
+            ["All"] + sorted(df["Country"].unique())
+        )
+
+    with col2:
+        attack = st.selectbox(
+            "🛡️ Attack Type",
+            ["All"] + sorted(df["Attack Type"].unique())
+        )
+
+    with col3:
+        year = st.selectbox(
+            "📅 Year",
+            ["All"] + sorted(df["Year"].unique())
+        )
+
+    filtered_df = df.copy()
+
+    if country != "All":
+        filtered_df = filtered_df[
+            filtered_df["Country"] == country
+        ]
+
+    if attack != "All":
+        filtered_df = filtered_df[
+            filtered_df["Attack Type"] == attack
+        ]
+
+    if year != "All":
+        filtered_df = filtered_df[
+            filtered_df["Year"] == year
+        ]
+
+    # ---------------- DOWNLOAD BUTTON ----------------
+
+    st.download_button(
+        label="📥 Download Filtered Dataset",
+        data=filtered_df.to_csv(index=False),
+        file_name="Filtered_Cyber_Threats.csv",
+        mime="text/csv"
+    )
+
+    # ---------------- TABS ----------------
+
+    t1, t2, t3 = st.tabs(["📂 Data", "ℹ️ Info", "📊 Summary"])
+
+    # ================= DATA TAB =================
+
     with t1:
 
         st.markdown("""
-<h2 style="color:#00FFFF;">
-📂 Dataset Explorer
-</h2>
-""", unsafe_allow_html=True)
+        <h2 style="color:#00FFFF;">
+        📂 Dataset Explorer
+        </h2>
+        """, unsafe_allow_html=True)
 
         search = st.text_input("🔍 Search Country")
 
-        if search:
-            filtered_df = df[df["Country"].str.contains(search, case=False)]
-        else:
-            filtered_df = df.head(rows)
+        display_df = filtered_df.copy()
 
-        gb = GridOptionsBuilder.from_dataframe(filtered_df)
+        if search:
+            display_df = display_df[
+                display_df["Country"].str.contains(
+                    search,
+                    case=False,
+                    na=False
+                )
+            ]
+
+        display_df = display_df.head(rows)
+
+        gb = GridOptionsBuilder.from_dataframe(display_df)
 
         gb.configure_default_column(
             filter=True,
@@ -334,52 +424,42 @@ elif selected=="Data-set":
         grid_options = gb.build()
 
         AgGrid(
-            filtered_df,
+            display_df,
             gridOptions=grid_options,
             height=500,
             fit_columns_on_grid_load=True,
             theme="streamlit"
         )
 
-    # ---------------- INFO TAB ----------------
+    # ================= INFO TAB =================
+
     with t2:
 
-        st.title("Info")
+        st.write("### 📋 Dataset Information")
 
-        import io
+        st.write("**Rows:**", len(filtered_df))
+        st.write("**Columns:**", filtered_df.shape[1])
 
-        buffer = io.StringIO()
+        st.write("### 📝 Column Names")
+        st.write(list(filtered_df.columns))
 
-        df.info(buf=buffer)
+        st.write("### ❌ Missing Values")
+        st.write(filtered_df.isnull().sum())
 
-        st.text(buffer.getvalue())
+        st.write("### 🔤 Data Types")
+        st.write(filtered_df.dtypes)
 
-        st.write(df.columns)
+    # ================= SUMMARY TAB =================
 
-    # ---------------- SUMMARY TAB ----------------
     with t3:
 
-        st.title("Summary")
+        st.subheader("📊 Statistical Summary")
 
-        st.write(df.describe())
-    
-    
-# -------------------------------------- P R O C E S S I N G------------------------------------
+        st.dataframe(filtered_df.describe())
+        
+    st.markdown("---")
+    st.caption("Developed by Sonali | CybArena | B.Tech AIML")
 
-elif selected=="Preprocessing":
-    st.title("Preprocessing")
-    st.write("This is preprocessing page")
-    t1,t2=st.tabs(["Before Processing","After Processing"])
-    with t1:
-        st.write(df.isna().sum())
-    with t2:
-        df.drop(columns=["Attack Type","Attack Source","Target Industry","Number of Affected Users","Financial Loss (in Million $)","Country","Year","Defense Mechanism Used","Security Vulnerability Type","Incident Resolution Time (in Hours)"],inplace=True)
-        df.dropna(inplace=True)
-        st.write(df.isna().sum())
-        df.reset_index(drop=True,inplace=True)
-        st.write(df)
-        st.success("✅ Data preprocessing completed successfully!")
-    
 # --------------------------------- G R A P H S  ------------------------------------
     
 elif selected=="Graphs":
@@ -419,220 +499,97 @@ elif selected=="Graphs":
     file_name="Filtered_Cyber_Threats.csv",
     mime="text/csv"
 )
-    graph_option = st.selectbox(
-    "📊 Select Visualization",
-    [
-        "Streamlit Graphs",
-        "Bar Chart",
-        "Line Chart",
-        "Scatter Plot",
-        "Area Chart",
-        "3D Scatter",
-        "Pie Chart",
-        "Sunburst Chart",
-        "Matplotlib Graph"
-    ]
-)
+    
     
     ##################################################
     # STREAMLIT
     ##################################################
 
-    if graph_option == "Streamlit Graphs":
+    st.markdown("## 📊 Data Visualizations")
 
-        st.subheader("Financial Loss by Year")
-        st.line_chart(
-            graph_df,
-            x="Year",
-            y="Financial Loss (in Million $)"
-        )
-
-        st.subheader("Affected Users by Year")
-        st.bar_chart(
-            graph_df,
-            x="Year",
-            y="Number of Affected Users"
-        )
-
-        st.subheader("Scatter Chart")
-        st.scatter_chart(
-            graph_df,
-            x="Financial Loss (in Million $)",
-            y="Number of Affected Users"
-        )
-
-    ##################################################
-    # PLOTLY
-    ##################################################
-
-    elif graph_option == "Bar Graph":
-
-        fig1 = px.bar(
-            graph_df,
-            x="Country",
-            y="Number of Affected Users",
-            color="Attack Type",
-            hover_data=["Target Industry"]
+# Bar Chart
+    fig1 = px.bar(
+        graph_df,
+        x="Country",
+        y="Number of Affected Users",
+        color="Attack Type",
+        title="Affected Users by Country"
 )
+    st.plotly_chart(fig1, use_container_width=True)
 
-        fig1.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="#0D1117",
-            plot_bgcolor="#161B22",
-            font=dict(color="white"),
-            title_font=dict(size=22, color="#00FFFF"),
-            transition_duration=800
+# Line Chart
+    fig2 = px.line(
+        graph_df,
+        x="Year",
+        y="Financial Loss (in Million $)",
+        color="Country",
+        title="Financial Loss Over Years"
 )
+    st.plotly_chart(fig2, use_container_width=True)
 
-        st.plotly_chart(fig1, use_container_width=True)
+# Scatter Plot
+    fig3 = px.scatter(
+        graph_df,
+        x="Financial Loss (in Million $)",
+        y="Number of Affected Users",
+        color="Attack Type",
+        size="Financial Loss (in Million $)",
+        hover_data=["Country"],
+        title="Financial Loss vs Affected Users"
+)
+    st.plotly_chart(fig3, use_container_width=True)
 
-    elif graph_option == "Line Chart":
+# Area Chart
+    fig4 = px.area(
+        graph_df,
+        x="Year",
+        y="Number of Affected Users",
+        color="Country",
+        title="Affected Users Trend"
+)
+    st.plotly_chart(fig4, use_container_width=True)
+
+# 3D Scatter
+    fig5 = px.scatter_3d(
+        graph_df,
+        x="Year",
+        y="Financial Loss (in Million $)",
+        z="Number of Affected Users",
+        color="Attack Type",
+        title="3D Cyber Threat Analysis"
+)
+    st.plotly_chart(fig5, use_container_width=True)
+
+# Pie Chart
+    fig6 = px.pie(
+        graph_df,
+        names="Attack Type",
+        values="Number of Affected Users",
+        title="Attack Type Distribution"
+)
+    st.plotly_chart(fig6, use_container_width=True)
+
+# Sunburst Chart
+    fig7 = px.sunburst(
+        graph_df,
+        path=["Country", "Attack Type"],
+        values="Number of Affected Users",
+        title="Country → Attack Type"
+)
+    st.plotly_chart(fig7, use_container_width=True)
+
+# Matplotlib
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10,4))
+    ax.bar(graph_df["Country"], graph_df["Number of Affected Users"])
+    plt.xticks(rotation=90)
+    plt.title("Affected Users by Country")
+    st.pyplot(fig) 
+
+    st.markdown("---")
+    st.caption("Developed by Sonali | CybArena | B.Tech AIML")
         
-        fig2 = px.bar(
-            graph_df,
-            x="Country",
-            y="Number of Affected Users",
-            color="Attack Type",
-            hover_data=["Target Industry"]
-)
-
-        fig2.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="#0D1117",
-            plot_bgcolor="#161B22",
-            font=dict(color="white"),
-            title_font=dict(size=22, color="#00FFFF"),
-            transition_duration=800
-)
-
-        st.plotly_chart(fig2, use_container_width=True)        
-
-    elif graph_option == "Scatter Plot":
-
-
-        fig3 = px.bar(
-    graph_df,
-    x="Country",
-    y="Number of Affected Users",
-    color="Attack Type",
-    hover_data=["Target Industry"]
-)
-
-        fig3.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="#0D1117",
-            plot_bgcolor="#161B22",
-            font=dict(color="white"),
-            title_font=dict(size=22, color="#00FFFF"),
-            transition_duration=800
-)
-
-        st.plotly_chart(fig3, use_container_width=True)
-        
-    elif graph_option == "Area Chart":
-
-        fig4 = px.bar(
-    graph_df,
-    x="Country",
-    y="Number of Affected Users",
-    color="Attack Type",
-    hover_data=["Target Industry"]
-)
-
-        fig4.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="#0D1117",
-            plot_bgcolor="#161B22",
-            font=dict(color="white"),
-            title_font=dict(size=22, color="#00FFFF"),
-            transition_duration=800
-)
-
-        st.plotly_chart(fig4, use_container_width=True)
-
-    elif graph_option == "3D Scatter":
-
-        fig5 = px.bar(
-    graph_df,
-    x="Country",
-    y="Number of Affected Users",
-    color="Attack Type",
-    hover_data=["Target Industry"]
-)
-
-        fig5.update_layout(
-    template="plotly_dark",
-    paper_bgcolor="#0D1117",
-    plot_bgcolor="#161B22",
-    font=dict(color="white"),
-    title_font=dict(size=22, color="#00FFFF"),
-    transition_duration=800
-)
-
-        st.plotly_chart(fig5, use_container_width=True)
-
-    elif graph_option == "Pie Chart":
-
-        fig6 = px.bar(
-    graph_df,
-    x="Country",
-    y="Number of Affected Users",
-    color="Attack Type",
-    hover_data=["Target Industry"]
-)
-
-        fig6.update_layout(
-    template="plotly_dark",
-    paper_bgcolor="#0D1117",
-    plot_bgcolor="#161B22",
-    font=dict(color="white"),
-    title_font=dict(size=22, color="#00FFFF"),
-    transition_duration=800
-)
-
-        st.plotly_chart(fig6, use_container_width=True)
-
-    elif graph_option == "Sunburst Chart":
-
-        fig7 = px.bar(
-    graph_df,
-    x="Country",
-    y="Number of Affected Users",
-    color="Attack Type",
-    hover_data=["Target Industry"]
-)
-
-        fig7.update_layout(
-    template="plotly_dark",
-    paper_bgcolor="#0D1117",
-    plot_bgcolor="#161B22",
-    font=dict(color="white"),
-    title_font=dict(size=22, color="#00FFFF"),
-    transition_duration=800
-)
-
-        st.plotly_chart(fig7, use_container_width=True)
-
-
-    ##################################################
-    # MATPLOTLIB
-    ##################################################
-
-    elif graph_option == "Matplotlib Graph":
-
-
-        import matplotlib.pyplot as plt
-
-        fig,ax=plt.subplots(figsize=(12,5))
-
-        ax.bar(
-            graph_df["Country"],
-            graph_df["Number of Affected Users"]
-        )
-
-        plt.xticks(rotation=90)
-
-        st.pyplot(fig)
         
 # ---------------------------------A T T A C K -T Y P E --------------------------------------------
 
@@ -704,6 +661,9 @@ elif selected=="Attack Guide":
         st.error(f"**⚠️ Possible Impact**\n\n{attack_info[attack]['impact']}")
 
         st.success(f"**🛡️ Prevention Tips**\n\n{attack_info[attack]['prevention']}")
+        
+    st.markdown("---")
+    st.caption("Developed by Sonali | CybArena | B.Tech AIML")
     
 # --------------------------------------- A B O U T --------------------------------------------
 
@@ -721,8 +681,7 @@ To provide a user - friendly platform for exploring cybersecurity data and ident
 - 🌍 Country-wise Analysis
 - 🛡️ Attack Type Filtering
 - 📆 Year-wise Analysis
-- 📉 KPI Metrics
-- 🧹 Data Preprocessing
+
 - 📈 Streamlit, Plotly & Matplotlib Visualizations
 """)
     st.markdown("## 🛠️ Technologies Used")
@@ -810,3 +769,6 @@ To provide a user - friendly platform for exploring cybersecurity data and ident
     
     
     st.warning("Thank you for exploring CybArena!🛡️")
+
+    st.markdown("---")
+    st.caption("Developed by Sonali | CybArena | B.Tech AIML")
